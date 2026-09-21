@@ -4,7 +4,7 @@ Strumento browser-based per scrivere metadati IPTC (e XMP) direttamente nei file
 
 **Zero installazione.** Apri la pagina, trascina i file, scarica il risultato. Tutto avviene nel tuo browser: nessun file viene caricato su un server esterno.
 
-🔗 **Apri lo strumento:** _(link alla pagina GitHub Pages, es. `ttps://sebamc2023.github.io/PICTURES-png-iptc-tagger/`)_
+🔗 **Apri lo strumento:** _(link alla pagina GitHub Pages, es. `https://sebamc2023.github.io/PICTURES-png-iptc-tagger/`)_
 
 ---
 
