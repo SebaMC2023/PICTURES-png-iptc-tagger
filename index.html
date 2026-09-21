@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PNG IPTC Tagger — Panini</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --ink: #1c1f24;
+    --paper: #f6f5f2;
+    --panel: #ffffff;
+    --line: #dcd9d2;
+    --accent: #2f5d4f;
+    --accent-soft: #e6efe9;
+    --warn: #9a4b2f;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --sans: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.45;
+  }
+  header {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 1.35rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    margin: 0;
+    color: #5b5f66;
+    font-size: 0.92rem;
+    max-width: 62ch;
+  }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    gap: 20px;
+  }
+  section.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  section.panel h2 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    font-weight: 650;
+  }
+  section.panel .hint {
+    margin: 0 0 14px;
+    color: #6b6f76;
+    font-size: 0.85rem;
+  }
+  #dropzone {
+    border: 1.5px dashed #b7c9c0;
+    border-radius: 10px;
+    padding: 34px 20px;
+    text-align: center;
+    color: #4c5158;
+    background: var(--accent-soft);
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  #dropzone.drag {
+    border-color: var(--accent);
+    background: #dcebe3;
+  }
+  #dropzone strong { color: var(--accent); }
+  #fileInput { display: none; }
+  #fileList {
+    margin-top: 14px;
+    display: grid;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .file-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 10px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 0.85rem;
+  }
+  .file-row .name { font-family: var(--mono); word-break: break-all; }
+  .file-row .remove {
+    border: none;
+    background: none;
+    color: var(--warn);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 6px;
+  }
+  .field {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 14px;
+  }
+  .field label {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .field .field-hint {
+    font-size: 0.76rem;
+    color: #7a7e85;
+  }
+  .field input, .field textarea {
+    font-family: var(--sans);
+    font-size: 0.92rem;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    resize: vertical;
+  }
+  .field input:focus, .field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  details.placeholders {
+    margin: -4px 0 18px;
+    font-size: 0.82rem;
+  }
+  details.placeholders summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .ph-grid {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 6px;
+  }
+  .ph-chip {
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    background: var(--accent-soft);
+    border: 1px solid #c7dcd2;
+    border-radius: 5px;
+    padding: 5px 8px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .ph-chip:hover { background: #d3e6dc; }
+  #preview {
+    margin-top: 8px;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    display: grid;
+    gap: 8px;
+  }
+  .preview-row {
+    font-size: 0.82rem;
+    font-family: var(--mono);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .preview-row .fn { color: var(--accent); font-weight: 600; }
+  .actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 11px 20px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.primary:disabled {
+    background: #a9b8b1;
+    cursor: not-allowed;
+  }
+  button.primary:hover:not(:disabled) { background: #264d41; }
+  #status {
+    font-size: 0.85rem;
+    color: #5b5f66;
+  }
+  #log {
+    margin-top: 12px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: #4c5158;
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+  footer {
+    text-align: center;
+    color: #8a8e94;
+    font-size: 0.78rem;
+    padding: 10px 24px 30px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PNG IPTC Tagger</h1>
+  <p>Scrive i metadati IPTC (e i corrispondenti XMP) direttamente nei file PNG scontornati, senza convertirli in altro formato. Tutto avviene nel browser: nessun file lascia il tuo computer.</p>
+</header>
+
+<main>
+
+  <section class="panel">
+    <h2>1. Carica i PNG</h2>
+    <p class="hint">Trascina qui uno o più file PNG, oppure clicca per selezionarli.</p>
+    <div id="dropzone">
+      <strong>Trascina i file PNG qui</strong><br>oppure clicca per sceglierli
+    </div>
+    <input type="file" id="fileInput" accept="image/png" multiple>
+    <div id="fileList"></div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Compila i campi IPTC</h2>
+    <p class="hint">Puoi digitare un testo fisso oppure usare i segnaposto (stessa sintassi di ACDSee) per compilare automaticamente i campi in base a nome file, cartella o numero progressivo.</p>
+
+    <details class="placeholders">
+      <summary>Segnaposto disponibili — clicca per inserirli nel campo attivo</summary>
+      <div class="ph-grid" id="phGrid"></div>
+    </details>
+
+    <div class="field">
+      <label for="f-title">Title</label>
+      <input type="text" id="f-title" data-field="title" placeholder="es. <File Properties:Filename (w/o extension)>">
+    </div>
+
+    <div class="field">
+      <label for="f-description">Description</label>
+      <textarea id="f-description" data-field="description" rows="2" placeholder="es. Sticker scontornato — <Content:Title>"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="f-writer">Description Writer</label>
+      <input type="text" id="f-writer" data-field="writer" placeholder="es. Mario Rossi">
+      <span class="field-hint">Il nome di chi ha compilato o revisionato la didascalia (IPTC Writer/Editor)</span>
+    </div>
+
+    <div class="field">
+      <label for="f-keywords">Keywords</label>
+      <input type="text" id="f-keywords" data-field="keywords" placeholder="es. calcio, 2027, <File Properties:Folder>">
+      <span class="field-hint">Separate da virgola. Ogni keyword può contenere a sua volta un segnaposto.</span>
+    </div>
+
+    <div class="field">
+      <label for="f-instructions">Instructions</label>
+      <textarea id="f-instructions" data-field="instructions" rows="2" placeholder="es. Uso interno — non pubblicare senza approvazione"></textarea>
+    </div>
+
+    <div id="preview">
+      <strong style="font-size:0.85rem;">Anteprima (primi file del lotto)</strong>
+      <div id="previewRows"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>3. Scrivi i metadati e scarica</h2>
+    <p class="hint">I file originali non vengono modificati: riceverai copie taggate, singolarmente o in uno ZIP se sono più di uno.</p>
+    <div class="actions">
+      <button class="primary" id="runBtn" disabled>Scrivi IPTC e scarica</button>
+      <span id="status"></span>
+    </div>
+    <div id="log"></div>
+  </section>
+
+</main>
+
+<footer>
+  Scrive un chunk zTXt "Raw profile type iptc" (convenzione ExifTool/ImageMagick, compatibile con Photoshop, Bridge e la maggior parte dei DAM) più un chunk iTXt XMP in parallelo — nessuna conversione, nessuna dipendenza esterna installata.
+</footer>
+
+<script>
+/* =========================================================
+   PLACEHOLDER ("ACDSee grammar") DEFINITIONS
+   ========================================================= */
+const PLACEHOLDERS = [
+  ["<File Properties:Filename>", "Nome file completo (con estensione)"],
+  ["<File Properties:Filename (w/o extension)>", "Nome file senza estensione"],
+  ["<File Properties:Extension>", "Estensione del file"],
+  ["<File Properties:Folder>", "Nome della cartella di provenienza (se disponibile)"],
+  ["<Counter>", "Numero progressivo nel lotto (1, 2, 3…)"],
+  ["<Counter:2>", "Progressivo su 2 cifre (01, 02…)"],
+  ["<Counter:3>", "Progressivo su 3 cifre (001, 002…)"],
+  ["<Content:Title>", "Valore già digitato nel campo Title"],
+  ["<Content:Description>", "Valore già digitato nel campo Description"],
+];
+
+let activeField = null;
+
+function buildPlaceholderChips() {
+  const grid = document.getElementById('phGrid');
+  PLACEHOLDERS.forEach(([token, desc]) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'ph-chip';
+    chip.textContent = token;
+    chip.title = desc;
+    chip.addEventListener('click', () => insertPlaceholder(token));
+    grid.appendChild(chip);
+  });
+}
+
+function insertPlaceholder(token) {
+  const el = activeField || document.getElementById('f-title');
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? el.value.length;
+  el.value = el.value.slice(0, start) + token + el.value.slice(end);
+  el.focus();
+  el.selectionStart = el.selectionEnd = start + token.length;
+  refreshPreview();
+}
+
+document.querySelectorAll('[data-field]').forEach(el => {
+  el.addEventListener('focus', () => activeField = el);
+  el.addEventListener('input', refreshPreview);
+});
+
+/* =========================================================
+   TEMPLATE RESOLUTION
+   ========================================================= */
+function resolveTemplate(template, ctx) {
+  if (!template) return '';
+  return template
+    .replace(/<File Properties:Filename \(w\/o extension\)>/g, ctx.baseName)
+    .replace(/<File Properties:Filename>/g, ctx.fileName)
+    .replace(/<File Properties:Extension>/g, ctx.extension)
+    .replace(/<File Properties:Folder>/g, ctx.folder)
+    .replace(/<Counter:2>/g, String(ctx.counter).padStart(2, '0'))
+    .replace(/<Counter:3>/g, String(ctx.counter).padStart(3, '0'))
+    .replace(/<Counter>/g, String(ctx.counter))
+    .replace(/<Content:Title>/g, ctx.rawTitle || '')
+    .replace(/<Content:Description>/g, ctx.rawDescription || '');
+}
+
+function fileContext(file, index) {
+  const fileName = file.name;
+  const dot = fileName.lastIndexOf('.');
+  const baseName = dot > -1 ? fileName.slice(0, dot) : fileName;
+  const extension = dot > -1 ? fileName.slice(dot + 1) : '';
+  const rel = file.webkitRelativePath || '';
+  const folder = rel.includes('/') ? rel.split('/').slice(-2, -1)[0] : '';
+  return { fileName, baseName, extension, folder, counter: index + 1 };
+}
+
+function getFieldValues() {
+  return {
+    title: document.getElementById('f-title').value,
+    description: document.getElementById('f-description').value,
+    writer: document.getElementById('f-writer').value,
+    keywords: document.getElementById('f-keywords').value,
+    instructions: document.getElementById('f-instructions').value,
+  };
+}
+
+function resolveFieldsForFile(file, index) {
+  const raw = getFieldValues();
+  const ctx = fileContext(file, index);
+  const rawTitle = resolveTemplate(raw.title, ctx);
+  const rawDescription = resolveTemplate(raw.description, { ...ctx, rawTitle });
+  const fullCtx = { ...ctx, rawTitle, rawDescription };
+
+  const keywords = raw.keywords
+    .split(',')
+    .map(k => resolveTemplate(k.trim(), fullCtx))
+    .filter(Boolean);
+
+  return {
+    title: rawTitle,
+    description: rawDescription,
+    writer: resolveTemplate(raw.writer, fullCtx),
+    instructions: resolveTemplate(raw.instructions, fullCtx),
+    keywords,
+  };
+}
+
+/* =========================================================
+   FILE QUEUE + DROPZONE
+   ========================================================= */
+let queue = [];
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
+
+function addFiles(files) {
+  const pngs = files.filter(f => f.type === 'image/png' || /\.png$/i.test(f.name));
+  queue.push(...pngs);
+  renderFileList();
+  refreshPreview();
+}
+
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = '';
+  queue.forEach((f, i) => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.innerHTML = `<span class="name">${f.name}</span>`;
+    const btn = document.createElement('button');
+    btn.className = 'remove';
+    btn.textContent = 'rimuovi';
+    btn.addEventListener('click', () => { queue.splice(i, 1); renderFileList(); refreshPreview(); });
+    row.appendChild(btn);
+    list.appendChild(row);
+  });
+  document.getElementById('runBtn').disabled = queue.length === 0;
+}
+
+function refreshPreview() {
+  const box = document.getElementById('previewRows');
+  box.innerHTML = '';
+  queue.slice(0, 3).forEach((f, i) => {
+    const r = resolveFieldsForFile(f, i);
+    const row = document.createElement('div');
+    row.className = 'preview-row';
+    row.innerHTML =
+      `<span class="fn">${f.name}</span><br>` +
+      `Title: ${escapeHtml(r.title) || '<i>(vuoto)</i>'}<br>` +
+      `Description: ${escapeHtml(r.description) || '<i>(vuoto)</i>'}<br>` +
+      `Writer: ${escapeHtml(r.writer) || '<i>(vuoto)</i>'}<br>` +
+      `Keywords: ${escapeHtml(r.keywords.join(', ')) || '<i>(vuoto)</i>'}<br>` +
+      `Instructions: ${escapeHtml(r.instructions) || '<i>(vuoto)</i>'}`;
+    box.appendChild(row);
+  });
+  if (queue.length > 3) {
+    const more = document.createElement('div');
+    more.className = 'preview-row';
+    more.textContent = `… e altri ${queue.length - 3} file`;
+    box.appendChild(more);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+buildPlaceholderChips();
+
+/* =========================================================
+   PNG CHUNK ENGINE (pure JS, no conversion)
+   ========================================================= */
+const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+function u32be(n) { return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]; }
+function u16be(n) { return [(n >>> 8) & 255, n & 255]; }
+
+function concatBytes(arrays) {
+  const total = arrays.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const a of arrays) { out.set(a, off); off += a.length; }
+  return out;
+}
+
+// PNG's CRC-32 table (identical to zlib's, standard PNG spec Annex D)
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function makeChunk(type, data) {
+  const typeBytes = strToBytes(type);
+  const crc = crc32(concatBytes([typeBytes, data]));
+  return concatBytes([
+    new Uint8Array(u32be(data.length)),
+    typeBytes,
+    data,
+    new Uint8Array(u32be(crc)),
+  ]);
+}
+
+function strToBytes(s) {
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 0xff;
+  return out;
+}
+
+function bytesToLatin1(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return s;
+}
+
+function parsePng(bytes) {
+  const chunks = [];
+  let i = 8;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  while (i < bytes.length) {
+    const length = dv.getUint32(i);
+    const type = bytesToLatin1(bytes.subarray(i + 4, i + 8));
+    const data = bytes.slice(i + 8, i + 8 + length);
+    chunks.push({ type, data });
+    i += 8 + length + 4;
+  }
+  return chunks;
+}
+
+function rebuildPng(chunks) {
+  return concatBytes([new Uint8Array(PNG_SIG), ...chunks.map(c => makeChunk(c.type, c.data))]);
+}
+
+// ---- IPTC IIM ----
+function iimDataset(record, tag, textOrBytes) {
+  const data = typeof textOrBytes === 'string' ? new TextEncoder().encode(textOrBytes) : textOrBytes;
+  const head = new Uint8Array([0x1c, record, tag, ...u16be(data.length)]);
+  return concatBytes([head, data]);
+}
+
+function buildIim(fields) {
+  const parts = [
+    iimDataset(1, 90, new Uint8Array([0x1b, 0x25, 0x47])), // CodedCharacterSet = UTF-8 (Envelope record)
+    iimDataset(2, 0, new Uint8Array([0x00, 0x04])),         // ApplicationRecordVersion
+  ];
+  if (fields.title) parts.push(iimDataset(2, 5, fields.title));
+  if (fields.description) parts.push(iimDataset(2, 120, fields.description));
+  if (fields.writer) parts.push(iimDataset(2, 122, fields.writer));
+  if (fields.instructions) parts.push(iimDataset(2, 40, fields.instructions));
+  (fields.keywords || []).forEach(k => parts.push(iimDataset(2, 25, k)));
+  return concatBytes(parts);
+}
+
+function wrap8bim(resId, data) {
+  const head = concatBytes([
+    strToBytes('8BIM'),
+    new Uint8Array(u16be(resId)),
+    new Uint8Array([0x00, 0x00]), // empty name, padded to even
+    new Uint8Array(u32be(data.length)),
+  ]);
+  const pad = (data.length % 2 === 1) ? new Uint8Array([0x00]) : new Uint8Array(0);
+  return concatBytes([head, data, pad]);
+}
+
+function rawProfileText(name, data) {
+  let hex = '';
+  for (let i = 0; i < data.length; i++) hex += data[i].toString(16).padStart(2, '0');
+  const lines = [];
+  for (let i = 0; i < hex.length; i += 72) lines.push(hex.slice(i, i + 72));
+  const lenField = String(data.length).padStart(8, ' ');
+  return `\n${name}\n${lenField}\n${lines.join('\n')}\n`;
+}
+
+function ztxtChunk(keyword, text) {
+  const compressed = pako.deflate(strToBytes(text));
+  const data = concatBytes([strToBytes(keyword), new Uint8Array([0x00, 0x00]), compressed]);
+  return { type: 'zTXt', data };
+}
+
+// ---- XMP ----
+function xmlEscape(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function buildXmpPacket(fields) {
+  const kwRdf = (fields.keywords || []).map(k => `<rdf:li>${xmlEscape(k)}</rdf:li>`).join('');
+  return `<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+<rdf:Description rdf:about=""
+ xmlns:dc="http://purl.org/dc/elements/1.1/"
+ xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/">
+${fields.title ? `<dc:title><rdf:Alt><rdf:li xml:lang="x-default">${xmlEscape(fields.title)}</rdf:li></rdf:Alt></dc:title>` : ''}
+${fields.description ? `<dc:description><rdf:Alt><rdf:li xml:lang="x-default">${xmlEscape(fields.description)}</rdf:li></rdf:Alt></dc:description>` : ''}
+${fields.writer ? `<photoshop:CaptionWriter>${xmlEscape(fields.writer)}</photoshop:CaptionWriter>` : ''}
+${fields.instructions ? `<photoshop:Instructions>${xmlEscape(fields.instructions)}</photoshop:Instructions>` : ''}
+${kwRdf ? `<dc:subject><rdf:Bag>${kwRdf}</rdf:Bag></dc:subject>` : ''}
+</rdf:Description>
+</rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
+}
+
+function itxtChunk(keyword, text) {
+  const head = concatBytes([
+    strToBytes(keyword), new Uint8Array([0x00]),
+    new Uint8Array([0x00]), // compression flag
+    new Uint8Array([0x00]), // compression method
+    new Uint8Array([0x00]), // language tag + null
+    new Uint8Array([0x00]), // translated keyword + null
+  ]);
+  return { type: 'iTXt', data: concatBytes([head, new TextEncoder().encode(text)]) };
+}
+
+function writeIptcToPng(bytes, fields) {
+  const chunks = parsePng(bytes);
+  const filtered = chunks.filter(c => {
+    if (c.type === 'iTXt') {
+      const nul = c.data.indexOf(0);
+      const keyword = nul > -1 ? bytesToLatin1(c.data.subarray(0, nul)) : '';
+      if (keyword === 'XML:com.adobe.xmp') return false;
+    }
+    if (c.type === 'zTXt' || c.type === 'tEXt') {
+      const nul = c.data.indexOf(0);
+      const keyword = nul > -1 ? bytesToLatin1(c.data.subarray(0, nul)) : '';
+      if (keyword === 'Raw profile type iptc') return false;
+    }
+    return true;
+  });
+
+  const irb = wrap8bim(0x0404, buildIim(fields));
+  const iptcChunk = ztxtChunk('Raw profile type iptc', rawProfileText('IPTC profile', irb));
+  const xmpChunk = itxtChunk('XML:com.adobe.xmp', buildXmpPacket(fields));
+
+  const ihdrIdx = filtered.findIndex(c => c.type === 'IHDR');
+  filtered.splice(ihdrIdx + 1, 0, iptcChunk, xmpChunk);
+
+  return rebuildPng(filtered);
+}
+
+/* =========================================================
+   RUN
+   ========================================================= */
+document.getElementById('runBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('runBtn');
+  const status = document.getElementById('status');
+  const log = document.getElementById('log');
+  log.textContent = '';
+  btn.disabled = true;
+  status.textContent = 'Elaborazione in corso…';
+
+  try {
+    const results = [];
+    for (let i = 0; i < queue.length; i++) {
+      const file = queue[i];
+      const fields = resolveFieldsForFile(file, i);
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const out = writeIptcToPng(buf, fields);
+      results.push({ name: file.name, data: out });
+      log.textContent += `✓ ${file.name}\n`;
+    }
+
+    if (results.length === 1) {
+      downloadBlob(new Blob([results[0].data], { type: 'image/png' }), results[0].name);
+    } else {
+      const zip = new JSZip();
+      results.forEach(r => zip.file(r.name, r.data));
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(zipBlob, 'png-iptc-taggati.zip');
+    }
+    status.textContent = `Fatto — ${results.length} file elaborati.`;
+  } catch (err) {
+    console.error(err);
+    log.textContent += `\nErrore: ${err.message}`;
+    status.textContent = 'Si è verificato un errore, vedi log.';
+  } finally {
+    btn.disabled = queue.length === 0;
+  }
+});
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
