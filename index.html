@@ -433,7 +433,11 @@ function renderFileList() {
   queue.forEach((f, i) => {
     const row = document.createElement('div');
     row.className = 'file-row';
-    row.innerHTML = `<span class="name">${f.name}</span>`;
+    // XSS-safe: uso textContent invece di innerHTML per il nome file
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'name';
+    nameSpan.textContent = f.name;
+    row.appendChild(nameSpan);
     const btn = document.createElement('button');
     btn.className = 'remove';
     btn.textContent = 'rimuovi';
@@ -451,13 +455,21 @@ function refreshPreview() {
     const r = resolveFieldsForFile(f, i);
     const row = document.createElement('div');
     row.className = 'preview-row';
-    row.innerHTML =
-      `<span class="fn">${f.name}</span><br>` +
+    // XSS-safe: f.name via textContent, valori risolti via escapeHtml
+    const fnSpan = document.createElement('span');
+    fnSpan.className = 'fn';
+    fnSpan.textContent = f.name;
+    row.appendChild(fnSpan);
+    const br = document.createElement('br');
+    row.appendChild(br);
+    const details = document.createElement('span');
+    details.innerHTML =
       `Title: ${escapeHtml(r.title) || '<i>(vuoto)</i>'}<br>` +
       `Description: ${escapeHtml(r.description) || '<i>(vuoto)</i>'}<br>` +
       `Writer: ${escapeHtml(r.writer) || '<i>(vuoto)</i>'}<br>` +
       `Keywords: ${escapeHtml(r.keywords.join(', ')) || '<i>(vuoto)</i>'}<br>` +
       `Instructions: ${escapeHtml(r.instructions) || '<i>(vuoto)</i>'}`;
+    row.appendChild(details);
     box.appendChild(row);
   });
   if (queue.length > 3) {
