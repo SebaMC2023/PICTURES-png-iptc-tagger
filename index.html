@@ -235,7 +235,20 @@ footer { max-width: 980px; margin: 8px auto 36px; padding: 0 20px; font-size: 12
 </style>
 </head>
 <body>
-<div style="position:fixed;top:14px;right:18px;z-index:9999"><a href="https://2020images-toolkit.sebastiano-musica.workers.dev" style="display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,0.72);color:rgba(255,255,255,0.88);font:500 11px/1 system-ui,sans-serif;padding:7px 14px 7px 10px;border-radius:6px;text-decoration:none;border:1px solid rgba(255,255,255,0.18);backdrop-filter:blur(8px);letter-spacing:0.03em;transition:background .15s"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Toolkit</a></div>
+<div id="btn-toolkit" style="display:none;position:fixed;top:14px;right:18px;z-index:9999"><a href="https://2020images-toolkit.sebastiano-musica.workers.dev" style="display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,0.72);color:rgba(255,255,255,0.88);font:500 11px/1 system-ui,sans-serif;padding:7px 14px 7px 10px;border-radius:6px;text-decoration:none;border:1px solid rgba(255,255,255,0.18);backdrop-filter:blur(8px);letter-spacing:0.03em;transition:background .15s"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Toolkit</a></div>
+<script>
+/* Bottone Toolkit visibile solo agli admin (identita' letta da Cloudflare Access) */
+(function(){
+  var ADMIN=['sebastiano.musica@gmail.com'];
+  fetch('/cdn-cgi/access/get-identity',{credentials:'same-origin'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(id){
+      if(id&&id.email&&ADMIN.indexOf(String(id.email).toLowerCase())!==-1){
+        document.getElementById('btn-toolkit').style.display='';
+      }
+    }).catch(function(){});
+})();
+</script>
 
 
 <header class="topbar">
