@@ -273,7 +273,7 @@
 
     <div class="field">
       <label for="f-instructions">Instructions</label>
-      <textarea id="f-instructions" data-field="instructions" rows="2" placeholder="es. Uso interno, non pubblicare senza approvazione">&lt;File Properties:Filename (w/o extension)&gt;</textarea>
+      <textarea id="f-instructions" data-field="instructions" rows="2" placeholder="es. Uso interno — non pubblicare senza approvazione"></textarea>
     </div>
 
     <div id="preview">
@@ -433,7 +433,6 @@ function renderFileList() {
   queue.forEach((f, i) => {
     const row = document.createElement('div');
     row.className = 'file-row';
-    // XSS-safe: uso textContent invece di innerHTML per il nome file
     const nameSpan = document.createElement('span');
     nameSpan.className = 'name';
     nameSpan.textContent = f.name;
@@ -455,21 +454,32 @@ function refreshPreview() {
     const r = resolveFieldsForFile(f, i);
     const row = document.createElement('div');
     row.className = 'preview-row';
-    // XSS-safe: f.name via textContent, valori risolti via escapeHtml
-    const fnSpan = document.createElement('span');
-    fnSpan.className = 'fn';
-    fnSpan.textContent = f.name;
-    row.appendChild(fnSpan);
-    const br = document.createElement('br');
-    row.appendChild(br);
-    const details = document.createElement('span');
-    details.innerHTML =
-      `Title: ${escapeHtml(r.title) || '<i>(vuoto)</i>'}<br>` +
-      `Description: ${escapeHtml(r.description) || '<i>(vuoto)</i>'}<br>` +
-      `Writer: ${escapeHtml(r.writer) || '<i>(vuoto)</i>'}<br>` +
-      `Keywords: ${escapeHtml(r.keywords.join(', ')) || '<i>(vuoto)</i>'}<br>` +
-      `Instructions: ${escapeHtml(r.instructions) || '<i>(vuoto)</i>'}`;
-    row.appendChild(details);
+    const addLine = (label, val) => {
+      const line = document.createElement('div');
+      if (label === 'fn') {
+        const span = document.createElement('span');
+        span.className = 'fn';
+        span.textContent = val;
+        line.appendChild(span);
+      } else {
+        const t = document.createTextNode(label + ': ');
+        line.appendChild(t);
+        if (val) {
+          line.appendChild(document.createTextNode(val));
+        } else {
+          const i = document.createElement('i');
+          i.textContent = '(vuoto)';
+          line.appendChild(i);
+        }
+      }
+      row.appendChild(line);
+    };
+    addLine('fn', f.name);
+    addLine('Title', r.title);
+    addLine('Description', r.description);
+    addLine('Writer', r.writer);
+    addLine('Keywords', r.keywords.join(', '));
+    addLine('Instructions', r.instructions);
     box.appendChild(row);
   });
   if (queue.length > 3) {
